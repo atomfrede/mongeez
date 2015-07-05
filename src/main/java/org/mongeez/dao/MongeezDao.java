@@ -12,19 +12,13 @@
 
 package org.mongeez.dao;
 
-import com.mongodb.BasicDBObject;
-import com.mongodb.DB;
-import com.mongodb.DBCollection;
-import com.mongodb.DBObject;
-import com.mongodb.Mongo;
-import com.mongodb.QueryBuilder;
-import com.mongodb.WriteConcern;
+import com.mongodb.*;
 import org.apache.commons.lang3.time.DateFormatUtils;
-
 import org.mongeez.MongoAuth;
 import org.mongeez.commands.ChangeSet;
 
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 
 public class MongeezDao {
@@ -36,10 +30,18 @@ public class MongeezDao {
     }
 
     public MongeezDao(Mongo mongo, String databaseName, MongoAuth auth) {
-        db = mongo.getDB(databaseName);
-        if (auth != null){
-        	db.authenticate(auth.getUsername(), auth.getPassword().toCharArray());
+        final List<MongoCredential> credentials = new LinkedList<MongoCredential>();
+
+        if (auth != null) {
+            if (auth.getAuthDb() == null || auth.getAuthDb().equals(databaseName)) {
+                credentials.add(MongoCredential.createCredential(auth.getUsername(), databaseName, auth.getPassword().toCharArray()));
+            } else {
+                credentials.add(MongoCredential.createCredential(auth.getUsername(), auth.getAuthDb(), auth.getPassword().toCharArray()));
+            }
         }
+
+        final MongoClient client = new MongoClient(mongo.getServerAddressList(), credentials);
+        db = client.getDB(databaseName);
         configure();
     }
 
@@ -104,7 +106,7 @@ public class MongeezDao {
         for (ChangeSetAttribute attribute : changeSetAttributes) {
             keys.append(attribute.name(), 1);
         }
-        getMongeezCollection().ensureIndex(keys);
+        getMongeezCollection().createIndex(keys);
     }
 
     public boolean wasExecuted(ChangeSet changeSet) {
